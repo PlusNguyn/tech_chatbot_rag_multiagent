@@ -4,12 +4,13 @@ from django.core.management.base import BaseCommand
 
 from rag_engine.core.config import settings
 from rag_engine.ingestion.build_index import build_index
+from rag_engine.rag.vector_store import count_vectors
 
 
 class Command(BaseCommand):
-    """Command CLI build dữ liệu CSV thành FAISS vector index."""
+    """Command CLI build dữ liệu CSV thành vector index (FAISS hoặc Qdrant)."""
 
-    help = "Build or rebuild the FAISS index from local product CSV data."
+    help = "Build or rebuild the vector index from local product CSV data."
 
     def add_arguments(self, parser):
         """Khai báo các tham số dòng lệnh cho đường dẫn dữ liệu và index."""
@@ -22,6 +23,9 @@ class Command(BaseCommand):
             data_dir=options["data_dir"],
             index_dir=options["index_dir"],
         )
+        backend = settings.vector_backend
         self.stdout.write(
-            self.style.SUCCESS(f"Built FAISS index with {db.index.ntotal} vectors.")
+            self.style.SUCCESS(
+                f"Built {backend} index with {count_vectors(db)} vectors."
+            )
         )

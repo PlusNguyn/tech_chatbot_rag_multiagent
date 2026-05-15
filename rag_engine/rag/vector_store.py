@@ -1,43 +1,39 @@
-"""Tạo, lưu và load FAISS vector store cho hệ thống RAG."""
-
-from pathlib import Path
-
-from langchain_community.vectorstores import FAISS
+"""Dispatcher chọn backend vector store (FAISS hoặc Qdrant) theo cấu hình."""
 
 from rag_engine.core.config import settings
-from rag_engine.core.embedding import get_embeddings
+from rag_engine.rag.vector_store_faiss import (
+    count_faiss_vectors,
+    create_faiss_db,
+    load_faiss_db,
+)
+from rag_engine.rag.vector_store_qdrant import (
+    count_qdrant_vectors,
+    create_qdrant_db,
+    load_qdrant_db,
+)
+
+
+def _backend() -> str:
+    """Trả về backend đang dùng, đã chuẩn hóa về chữ thường."""
+    return (settings.vector_backend or "faiss").lower()
 
 
 def create_vector_db(chunks, index_dir=None):
-    """Tạo FAISS index từ các chunk và lưu index vào thư mục chỉ định."""
-    if not chunks:
-        raise ValueError("Cannot create FAISS index from empty chunks.")
-
-    index_path = Path(index_dir or settings.faiss_index_dir)
-    index_path.mkdir(parents=True, exist_ok=True)
-    batch_size = 32
-
-    print(f"Creating vector DB for {len(chunks)} chunks...")
-    db = FAISS.from_documents(chunks[:batch_size], get_embeddings())
-
-    for i in range(batch_size, len(chunks), batch_size):
-        batch = chunks[i : i + batch_size]
-        print(f"Processing batch {i} -> {i + len(batch)}...")
-        db.add_documents(batch)
-
-    db.save_local(str(index_path))
-    print(f"Saved vector DB to {index_path}")
-    return db
+    """Tạo vector DB mới bằng backend đang cấu hình."""
+    if _backend() == "qdrant":
+        return create_qdrant_db(chunks)
+    return create_faiss_db(chunks, index_dir=index_dir)
 
 
 def load_vector_db(index_dir=None):
-    """Load FAISS index đã lưu từ ổ đĩa bằng embedding model hiện tại."""
-    index_path = Path(index_dir or settings.faiss_index_dir)
-    if not index_path.exists():
-        raise ValueError(f"FAISS index not found at {index_path}")
+    """Load vector DB sẵn có bằng backend đang cấu hình."""
+    if _backend() == "qdrant":
+        return load_qdrant_db()
+    return load_faiss_db(index_dir=index_dir)
 
-    return FAISS.load_local(
-        str(index_path),
-        get_embeddings(),
-        allow_dangerous_deserialization=True,
-    )
+
+def count_vectors(db) -> int:
+    """Đếm vector hiện có (đa backend) để báo cáo hoặc so sánh."""
+    if _backend() == "qdrant":
+        return count_qdrant_vectors(db)
+    return count_faiss_vectors(db)
