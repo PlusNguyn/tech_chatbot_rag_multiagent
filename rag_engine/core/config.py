@@ -27,6 +27,10 @@ class Settings:
     google_api_key: str | None = os.getenv("GOOGLE_API_KEY")
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+
+    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama").lower()
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "qcwind/qwen2.5-7B-instruct-Q4_K_M")
+    ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "10"))
     rag_temperature: float = float(os.getenv("RAG_TEMPERATURE", "0.1"))
 
