@@ -1,4 +1,4 @@
-![Demo](images\image.png)
+![Demo](images/image.png)
 
 # Tech Chatbot RAG Multi-Agent
 
