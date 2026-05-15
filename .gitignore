@@ -1,0 +1,33 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+build/
+dist/
+
+# --- Environment / Secrets ---
+.env
+# Không bao giờ push file chứa API Key lên GitHub
+
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- Project Specific (RAG) ---
+# Thư mục chứa các vector đã được build (thường rất nặng)
+faiss_index/
+
+# Các file dữ liệu thô (Nếu bạn không muốn công khai dữ liệu khách hàng/sản phẩm)
+# data/*.csv
+# data/*.pdf
+
+# --- Logs & Temp ---
+*.log
+tmp/
+.DS_Store
