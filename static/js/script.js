@@ -451,49 +451,106 @@ async function getBotResponse(userMessage) {
     isAwaitingResponse = true;
     sendBtn.disabled = true;
 
+    let placeholder = null;
+    let accumulated = '';
+    let sources = [];
+    let errorMessage = null;
+
+    const ensurePlaceholder = () => {
+        if (placeholder) return placeholder;
+        hideTypingIndicator();
+        const botMessage = {
+            role: 'bot',
+            content: '',
+            timestamp: new Date().toISOString(),
+        };
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = createMessageHTML(botMessage);
+        placeholder = wrapper.firstElementChild;
+        messagesArea.appendChild(placeholder);
+        return placeholder;
+    };
+
+    const renderInto = (text) => {
+        const target = ensurePlaceholder();
+        const contentEl = target.querySelector('.message-content p')
+            || target.querySelector('.message-content');
+        if (contentEl) contentEl.textContent = text;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    };
+
     try {
         const response = await fetch(chatApiUrl, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                query: userMessage
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: userMessage }),
         });
 
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) {
-            throw new Error(data.error || 'Chatbot request failed.');
+        if (!response.ok || !response.body) {
+            const fallback = await response.json().catch(() => ({}));
+            throw new Error(fallback.error || `HTTP ${response.status}`);
         }
 
-        const botMessage = {
-            role: 'bot',
-            content: extractBotContent(data),
-            timestamp: new Date().toISOString()
-        };
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
 
-        const chat = chats.find(c => c.id === currentChatId);
-        if (!chat) {
-            return;
+        while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+
+            for (const part of parts) {
+                const line = part.trim();
+                if (!line.startsWith('data:')) continue;
+                const payload = line.slice(5).trim();
+                if (!payload) continue;
+                let event;
+                try {
+                    event = JSON.parse(payload);
+                } catch (_) {
+                    continue;
+                }
+                if (event.token) {
+                    accumulated += event.token;
+                    renderInto(accumulated);
+                }
+                if (event.sources) sources = event.sources;
+                if (event.error) errorMessage = event.error;
+                if (event.done) break;
+            }
         }
 
-        chat.messages.push(botMessage);
-        messagesArea.innerHTML += createMessageHTML(botMessage);
-        chatContainer.scrollTop = chatContainer.scrollHeight;
-        saveChats();
-    } catch (error) {
-        const botMessage = {
-            role: 'bot',
-            content: `Sorry, the chatbot could not answer right now.\n\n${error.message}`,
-            timestamp: new Date().toISOString()
-        };
+        if (errorMessage && !accumulated) {
+            throw new Error(errorMessage);
+        }
+
+        const finalContent = accumulated.trim() || 'Empty response.';
+        renderInto(finalContent);
 
         const chat = chats.find(c => c.id === currentChatId);
         if (chat) {
-            chat.messages.push(botMessage);
-            messagesArea.innerHTML += createMessageHTML(botMessage);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+            chat.messages.push({
+                role: 'bot',
+                content: finalContent,
+                timestamp: new Date().toISOString(),
+                sources,
+            });
+            saveChats();
+        }
+    } catch (error) {
+        const text = `Sorry, the chatbot could not answer right now.\n\n${error.message}`;
+        renderInto(text);
+        const chat = chats.find(c => c.id === currentChatId);
+        if (chat) {
+            chat.messages.push({
+                role: 'bot',
+                content: text,
+                timestamp: new Date().toISOString(),
+            });
             saveChats();
         }
     } finally {

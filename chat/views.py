@@ -1,12 +1,12 @@
 import json
 
-from django.http import JsonResponse
+from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
-from chat.services import ask_chatbot
+from chat.services import stream_chat
 
 
 def home_view(request):
@@ -35,11 +35,14 @@ def chat_message(request):
     if not query:
         return JsonResponse({"error": "Field 'query' is required."}, status=400)
 
-    try:
-        return JsonResponse(ask_chatbot(query))
-    except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
-    
+    response = StreamingHttpResponse(
+        stream_chat(query),
+        content_type="text/event-stream",
+    )
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response
+
 
 def chat_view(request):
     return render(

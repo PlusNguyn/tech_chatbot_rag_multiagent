@@ -9,7 +9,7 @@ class AgentState(TypedDict):
     """Schema trạng thái dùng chung cho toàn bộ multi-agent RAG workflow."""
 
     query: str
-    route: NotRequired[Literal["product_advice", "invalid"]]
+    route: NotRequired[Literal["product_advice", "smalltalk", "invalid"]]
     retrieved_docs: NotRequired[list[Document]]
     context: NotRequired[str]
     answer: NotRequired[str]
