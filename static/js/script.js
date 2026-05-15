@@ -28,10 +28,13 @@ const exportDataBtn = document.getElementById('exportDataBtn');
 const todayHistory = document.getElementById('todayHistory');
 const weekHistory = document.getElementById('weekHistory');
 const monthHistory = document.getElementById('monthHistory');
+const mainContent = document.getElementById('mainContent');
+const chatApiUrl = mainContent?.dataset.chatApiUrl || '/message/';
 
 // State
 let currentChatId = null;
 let chats = [];
+let isAwaitingResponse = false;
 let settings = {
     darkMode: false,
     fontSize: 'medium',
@@ -370,7 +373,7 @@ function escapeHtml(text) {
 // Send message
 function sendMessage() {
     const content = messageInput.value.trim();
-    if (!content) return;
+    if (!content || isAwaitingResponse) return;
     
     // Hide welcome screen
     welcomeScreen.classList.add('hidden');
@@ -444,110 +447,76 @@ function hideTypingIndicator() {
     }
 }
 
-// Get bot response (simulated - replace with actual API call)
-function getBotResponse(userMessage) {
-    // Simulate API call delay
-    setTimeout(() => {
-        hideTypingIndicator();
-        
-        // Generate response (this is where you'd call your Django backend)
-        const response = generateMockResponse(userMessage);
-        
-        // Add bot message
+async function getBotResponse(userMessage) {
+    isAwaitingResponse = true;
+    sendBtn.disabled = true;
+
+    try {
+        const response = await fetch(chatApiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                query: userMessage
+            })
+        });
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.error || 'Chatbot request failed.');
+        }
+
         const botMessage = {
             role: 'bot',
-            content: response,
+            content: extractBotContent(data),
             timestamp: new Date().toISOString()
         };
-        
+
         const chat = chats.find(c => c.id === currentChatId);
+        if (!chat) {
+            return;
+        }
+
         chat.messages.push(botMessage);
-        
-        // Render bot message
         messagesArea.innerHTML += createMessageHTML(botMessage);
-        
-        // Scroll to bottom
         chatContainer.scrollTop = chatContainer.scrollHeight;
-        
-        // Save
         saveChats();
-    }, 1000 + Math.random() * 1000);
+    } catch (error) {
+        const botMessage = {
+            role: 'bot',
+            content: `Sorry, the chatbot could not answer right now.\n\n${error.message}`,
+            timestamp: new Date().toISOString()
+        };
+
+        const chat = chats.find(c => c.id === currentChatId);
+        if (chat) {
+            chat.messages.push(botMessage);
+            messagesArea.innerHTML += createMessageHTML(botMessage);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+            saveChats();
+        }
+    } finally {
+        hideTypingIndicator();
+        isAwaitingResponse = false;
+        sendBtn.disabled = false;
+    }
 }
 
-// Mock response generator (replace with actual API)
-function generateMockResponse(userMessage) {
-    const responses = {
-        'ai': `**Artificial intelligence (AI)** is a field of computer science focused on building systems that can perform tasks that usually require human intelligence.
-
-Key concepts:
-- **Machine Learning**: systems learn patterns from data
-- **Deep Learning**: neural-network based learning
-- **NLP**: natural language processing
-- **Computer Vision**: understanding images and video
-
-Which area would you like to explore in more detail?`,
-        
-        'python': `**Python** is a general-purpose programming language that is easy to learn and has clear syntax.
-
-Strengths:
-- Simple, readable syntax
-- Rich library ecosystem (NumPy, Pandas, TensorFlow)
-- Strong fit for AI/ML and data science
-
-**JavaScript** is the language of the web, running in browsers and on servers.
-
-Strengths:
-- Runs in every modern browser
-- Large ecosystem (React, Vue, Node.js)
-- Full-stack development
-
-Both are strong choices, depending on what you want to build.`,
-        
-        'web': `**Web development learning roadmap:**
-
-1. **Core foundations:**
-   - HTML5 - page structure
-   - CSS3 - interface design
-   - JavaScript - user interaction
-
-2. **Frontend Framework:**
-   - React.js or Vue.js
-   - Tailwind CSS or Bootstrap
-
-3. **Backend:**
-   - Node.js + Express
-   - Python + Django/Flask
-   - Database: PostgreSQL, MongoDB
-
-4. **Tools:**
-   - Git & GitHub
-   - VS Code
-   - Chrome DevTools
-
-Start with HTML/CSS/JS and build several small projects as you learn.`,
-        
-        'default': `Thanks for asking. This is an interesting technology question.
-
-I am Tech ChatBot, designed to help you learn about:
-- Programming and software development
-- Artificial intelligence and machine learning
-- Web and mobile technologies
-- Emerging technology trends
-
-Ask a more specific question and I can give you a more useful answer.`
-    };
-    
-    const lowerMessage = userMessage.toLowerCase();
-    
-    if (lowerMessage.includes('ai') || lowerMessage.includes('machine learning') || lowerMessage.includes('artificial intelligence')) {
-        return responses['ai'];
-    } else if (lowerMessage.includes('python') || lowerMessage.includes('javascript') || lowerMessage.includes('compare')) {
-        return responses['python'];
-    } else if (lowerMessage.includes('web') || lowerMessage.includes('development') || lowerMessage.includes('roadmap')) {
-        return responses['web'];
+function extractBotContent(data) {
+    if (typeof data.answer === 'string' && data.answer.trim()) {
+        return data.answer.trim();
     }
-    
-    return responses['default'];
+
+    if (Array.isArray(data.sources) && data.sources.length > 0) {
+        return data.sources.join('\n');
+    }
+
+    if (typeof data.error === 'string' && data.error.trim()) {
+        return data.error.trim();
+    }
+
+    return 'The chatbot returned an empty response.';
 }
 
 // Copy message

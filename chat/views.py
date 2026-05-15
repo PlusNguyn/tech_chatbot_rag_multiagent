@@ -2,6 +2,7 @@ import json
 
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
@@ -41,4 +42,10 @@ def chat_message(request):
     
 
 def chat_view(request):
-    return render(request, "chat/chat.html")
+    return render(
+        request,
+        "chat/chat.html",
+        {
+            "chat_api_url": reverse("chat-message"),
+        },
+    )
