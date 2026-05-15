@@ -1,3 +1,5 @@
+"""Tạo, lưu và load FAISS vector store cho hệ thống RAG."""
+
 from pathlib import Path
 
 from langchain_community.vectorstores import FAISS
@@ -7,6 +9,7 @@ from rag_engine.core.embedding import get_embeddings
 
 
 def create_vector_db(chunks, index_dir=None):
+    """Tạo FAISS index từ các chunk và lưu index vào thư mục chỉ định."""
     if not chunks:
         raise ValueError("Cannot create FAISS index from empty chunks.")
 
@@ -28,6 +31,7 @@ def create_vector_db(chunks, index_dir=None):
 
 
 def load_vector_db(index_dir=None):
+    """Load FAISS index đã lưu từ ổ đĩa bằng embedding model hiện tại."""
     index_path = Path(index_dir or settings.faiss_index_dir)
     if not index_path.exists():
         raise ValueError(f"FAISS index not found at {index_path}")

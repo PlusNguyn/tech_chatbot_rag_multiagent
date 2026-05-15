@@ -1,3 +1,5 @@
+"""Entry point chạy chatbot RAG ở chế độ dòng lệnh."""
+
 import os
 import traceback
 
@@ -10,11 +12,13 @@ from rag_engine.rag.vector_store import create_vector_db, load_vector_db
 
 
 def prepare_chunks():
+    """Load dữ liệu nguồn và chia thành các chunk nhỏ để đưa vào vector DB."""
     docs = load_data()
     return split_docs(docs)
 
 
 def get_or_create_db(chunks):
+    """Load FAISS index hiện có hoặc tạo mới nếu chưa có index trên ổ đĩa."""
     if not os.path.exists(settings.faiss_index_dir):
         print("No index found. Creating new vector DB...")
         return create_vector_db(chunks, settings.faiss_index_dir)
@@ -24,6 +28,7 @@ def get_or_create_db(chunks):
 
 
 def update_db_if_needed(db, chunks):
+    """Bổ sung chunk mới vào FAISS index khi dữ liệu nguồn tăng lên."""
     try:
         current_count = db.index.ntotal
         new_count = len(chunks)
@@ -41,6 +46,7 @@ def update_db_if_needed(db, chunks):
 
 
 def run_chatbot(db):
+    """Chạy vòng lặp chat CLI và trả lời từng câu hỏi bằng RAG pipeline."""
     print("\nChatbot ready. Type 'exit' to quit.\n")
 
     while True:
@@ -58,6 +64,7 @@ def run_chatbot(db):
 
 
 def main():
+    """Khởi động chatbot: load prompt, chuẩn bị index và mở vòng lặp chat."""
     print("Starting RAG Chatbot with Gemini...\n")
     load_prompt()
     chunks = prepare_chunks()
@@ -68,4 +75,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

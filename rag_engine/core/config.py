@@ -1,3 +1,5 @@
+"""Cấu hình tập trung cho đường dẫn, model và tham số RAG."""
+
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +17,8 @@ if load_dotenv:
 
 @dataclass(frozen=True)
 class Settings:
+    """Tập hợp cấu hình đọc từ biến môi trường và giá trị mặc định."""
+
     base_dir: Path = BASE_DIR
     data_dir: Path = BASE_DIR / "data"
     storage_dir: Path = BASE_DIR / "storage"

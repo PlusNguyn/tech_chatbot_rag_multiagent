@@ -1,7 +1,10 @@
+"""Supervisor agent điều phối hướng xử lý ban đầu của câu hỏi."""
+
 from rag_engine.agents.state import AgentState
 
 
 def supervisor_agent(state: AgentState) -> AgentState:
+    """Chuẩn hóa query và quyết định route tiếp theo cho graph."""
     query = state.get("query", "").strip()
     if not query:
         return {
@@ -12,4 +15,3 @@ def supervisor_agent(state: AgentState) -> AgentState:
         }
 
     return {**state, "query": query, "route": "product_advice"}
-
