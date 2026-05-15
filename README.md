@@ -1,3 +1,5 @@
+[!Demo](images/image.png)
+
 # Tech Chatbot RAG Multi-Agent
 
 Ứng dụng Django + LangGraph cho chatbot tư vấn sản phẩm công nghệ dựa trên dữ liệu CSV nội bộ. Hệ thống dùng RAG với FAISS, embedding HuggingFace và Gemini để trả lời về điện thoại, laptop, iPad hoặc thông số sản phẩm.
