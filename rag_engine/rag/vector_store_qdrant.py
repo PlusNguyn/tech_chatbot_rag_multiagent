@@ -1,6 +1,6 @@
 """Backend Qdrant Cloud: tạo collection, ingest chunks và load vector store."""
 
-from langchain_community.vectorstores import Qdrant
+from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
@@ -47,10 +47,10 @@ def create_qdrant_db(chunks, collection_name: str | None = None):
     client = _get_client()
     _ensure_collection(client, name, _embedding_dim())
 
-    store = Qdrant(
+    store = QdrantVectorStore(
         client=client,
         collection_name=name,
-        embeddings=get_embeddings(),
+        embedding=get_embeddings(),
     )
 
     batch_size = 32
@@ -73,10 +73,10 @@ def load_qdrant_db(collection_name: str | None = None):
     if name not in existing:
         raise ValueError(f"Qdrant collection '{name}' not found.")
 
-    return Qdrant(
+    return QdrantVectorStore(
         client=client,
         collection_name=name,
-        embeddings=get_embeddings(),
+        embedding=get_embeddings(),
     )
 
 
