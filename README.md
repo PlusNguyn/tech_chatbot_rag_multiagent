@@ -1,69 +1,97 @@
 # Tech Chatbot RAG Multi-Agent
 
-![alt text](image.png)
+Ứng dụng Django + LangGraph cho chatbot tư vấn sản phẩm công nghệ dựa trên dữ liệu CSV nội bộ. Hệ thống dùng RAG với FAISS, embedding HuggingFace và Gemini để trả lời về điện thoại, laptop, iPad hoặc thông số sản phẩm.
 
-Một hệ thống Chatbot thông minh ứng dụng kỹ thuật **RAG (Retrieval-Augmented Generation)** để tư vấn các sản phẩm công nghệ (Laptop, Điện thoại, iPad) dựa trên dữ liệu nội bộ. Dự án sử dụng mô hình ngôn ngữ lớn **Gemini 2.5** và công cụ tìm kiếm vector **FAISS**.
+## Nhiệm vụ chính
 
-## Tính năng chính
-* **Tư vấn dựa trên dữ liệu thực tế:** Hệ thống đọc dữ liệu từ các file CSV (`tgdd_laptops_FULL.csv`, `soc_ratings.csv`) để trả lời thông số kỹ thuật và giá bán chính xác.
-* **Cơ chế RAG tối ưu:** * Sử dụng **RecursiveCharacterTextSplitter** để cắt nhỏ dữ liệu (Chunking) thông minh.
-    * Tích hợp **Google Generative AI Embeddings** (`text-embedding-004`).
-* **Quản lý Vector Database:** Lưu trữ và nạp chỉ mục cục bộ với **FAISS**, giúp tăng tốc độ truy vấn và tiết kiệm chi phí API.
-* **Xử lý giới hạn API (Rate Limit):** Cơ chế **Batching** & **Retry** tự động để vượt qua giới hạn `429 Resource Exhausted` của Google Free Tier.
-* **Prompt Engineering:** Tách biệt logic Prompt ra file `.txt` giúp dễ dàng tinh chỉnh "tính cách" chatbot.
+- Nạp dữ liệu sản phẩm từ `data/*.csv`.
+- Chia nhỏ dữ liệu thành chunks, embedding và lưu vào FAISS index.
+- Dùng LangGraph để điều phối nhiều agent: phân luồng, truy xuất dữ liệu, sinh câu trả lời và kiểm tra guardrail.
+- Không bịa thông tin khi không tìm thấy context nội bộ phù hợp.
+- Cho Django gọi RAG engine qua service thay vì trộn logic AI vào views.
 
-## Kiến trúc hệ thống (Workflow)
-1. **Data Ingestion:** Load dữ liệu CSV từ thư mục `data/`.
-2. **Chunking:** Cắt văn bản thành các đoạn nhỏ 600-800 ký tự với độ chồng lấp (overlap) phù hợp.
-3. **Embedding & Indexing:** Chuyển đổi văn bản thành vector và lưu vào `faiss_index`.
-4. **Retrieval:** Tìm kiếm 5 đoạn thông tin liên quan nhất khi người dùng đặt câu hỏi.
-5. **Generation:** Kết hợp ngữ cảnh (Context) và câu hỏi (Question) vào Prompt chuẩn để Gemini 1.5 tạo câu trả lời.
+## Cấu trúc production
 
-## Cấu trúc thư mục
 ```text
-tech-chatbot-rag-multiagent/
-├── app/
-│   ├── core/           # Cấu hình API Key, Embeddings
-│   ├── rag/            # Logic chính (Loader, Chunking, VectorStore, Chains)
-│   └──main.py             # File điều hướng chính (Entry Point)
-├── skills/          # Các kỹ năng mở rộng (Search, Compare, Calculator)
-├── prompts/            # Chứa file rag_prompt.txt (System Prompt)
-├── data/               # Thư mục chứa dữ liệu đầu vào (.csv, .pdf)
-├── faiss_index/        # Cơ sở dữ liệu Vector (tự sinh ra sau khi build)
-├── .env                # Biến môi trường (API Key)
-└── requirements.txt    # Danh sách thư viện cần thiết
+tech_chatbot_rag_multiagent_app/
+├── manage.py
+├── requirements.txt
+├── tech_chatbot_rag_multiagent_app/   # Django project settings/urls/asgi/wsgi
+├── chat/                              # Django app/API layer
+│   ├── services.py                    # Adapter gọi rag_engine
+│   ├── views.py                       # POST /chat/message/
+│   └── management/commands/
+│       └── build_rag_index.py         # Build FAISS index offline
+├── rag_engine/                        # Framework-neutral AI package
+│   ├── agents/                        # LangGraph multi-agent workflow
+│   │   ├── graph.py
+│   │   ├── state.py
+│   │   ├── supervisor/README.md
+│   │   ├── retrieval/README.md
+│   │   ├── advisor/README.md
+│   │   └── guardrails/README.md
+│   ├── core/                          # Config, LLM, embedding, prompt loading
+│   ├── ingestion/                     # Offline data/index pipeline
+│   └── rag/                           # Loader, chunking, vector store, retriever
+├── prompts/
+│   └── rag_prompt.txt
+├── data/
+├── storage/
+│   └── faiss_index/                   # Generated, ignored by Git
+└── crawler/
 ```
 
-## Cài đặt & Sử dụng
+## Agent workflow
 
-### 1. Cài đặt môi trường
+```text
+supervisor -> retrieval -> advisor -> final_guardrails -> END
+                 └-------> no_context_guardrails -> END
+```
+
+- `supervisor`: kiểm tra query và chọn luồng tư vấn sản phẩm.
+- `retrieval`: tìm context liên quan trong FAISS.
+- `advisor`: dùng prompt RAG và Gemini để sinh câu trả lời.
+- `guardrails`: chặn câu trả lời khi thiếu context hoặc output rỗng.
+
+## Cài đặt
+
 ```bash
-# Tạo môi trường ảo
 python -m venv venv
-source venv/Scripts/activate  # Trên Windows
-
-# Cài đặt thư viện
+venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Cấu hình API Key
-Tạo file `.env` hoặc file `app/core/config.py` và thêm khóa Gemini của bạn:
-```python
-GOOGLE_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
+Tạo `.env`:
+
+```env
+GOOGLE_API_KEY=your_key_here
+GEMINI_MODEL=gemini-2.5-flash
+RAG_TOP_K=10
+RAG_TEMPERATURE=0.1
 ```
 
-### 3. Chạy ứng dụng
+## Build index và chạy Django
+
 ```bash
-python main.py
+python manage.py build_rag_index
+python manage.py runserver
 ```
-*Hệ thống sẽ tự động kiểm tra, nếu chưa có database, nó sẽ tiến hành xây dựng từ dữ liệu trong thư mục `data/`.*
 
-## Nguyên tắc hoạt động (Guardrails)
-* Chatbot tuyệt đối không "chém gió" nếu không tìm thấy dữ liệu trong `context`.
-* Không tìm kiếm thông tin bên ngoài nếu không được phép.
-* Luôn ưu tiên độ chính xác về thông số kỹ thuật (Chip, RAM, Giá).
+Gửi câu hỏi:
 
-## Định hướng phát triển (Roadmap)
-- [ ] Tích hợp **Multi-Agent** (LangGraph/CrewAI) để phân chia vai trò tư vấn.
-- [ ] Thêm kỹ năng tìm kiếm Web thời gian thực (Search Skill) khi dữ liệu CSV cũ.
-- [ ] Xây dựng giao diện Web (Streamlit hoặc Next.js).
+```bash
+curl -X POST http://127.0.0.1:8000/chat/message/ ^
+  -H "Content-Type: application/json" ^
+  -d "{\"query\":\"Tư vấn điện thoại pin tốt trong tầm giá hợp lý\"}"
+```
+
+Response:
+
+```json
+{
+  "answer": "...",
+  "sources": ["..."],
+  "error": null
+}
+```
+
