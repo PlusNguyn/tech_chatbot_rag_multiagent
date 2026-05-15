@@ -8,7 +8,11 @@ from rag_engine.core.prompt_loader import load_prompt
 from rag_engine.rag.chunking import split_docs
 from rag_engine.rag.loader import load_data
 from rag_engine.rag.pipeline import ask_rag
-from rag_engine.rag.vector_store import create_vector_db, load_vector_db
+from rag_engine.rag.vector_store import (
+    count_vectors,
+    create_vector_db,
+    load_vector_db,
+)
 
 
 def prepare_chunks():
@@ -18,19 +22,23 @@ def prepare_chunks():
 
 
 def get_or_create_db(chunks):
-    """Load FAISS index hiện có hoặc tạo mới nếu chưa có index trên ổ đĩa."""
-    if not os.path.exists(settings.faiss_index_dir):
+    """Load vector DB hiện có hoặc tạo mới khi chưa tồn tại (đa backend)."""
+    try:
+        print("Loading existing vector DB...")
+        return load_vector_db(settings.faiss_index_dir)
+    except ValueError:
         print("No index found. Creating new vector DB...")
         return create_vector_db(chunks, settings.faiss_index_dir)
 
-    print("Loading existing vector DB...")
-    return load_vector_db(settings.faiss_index_dir)
-
 
 def update_db_if_needed(db, chunks):
-    """Bổ sung chunk mới vào FAISS index khi dữ liệu nguồn tăng lên."""
+    """Bổ sung chunk mới khi dữ liệu nguồn tăng lên (chỉ áp dụng cho FAISS)."""
+    if settings.vector_backend.lower() == "qdrant":
+        print("Qdrant: upsert thực hiện trực tiếp khi build_index, bỏ qua bước update.")
+        return
+
     try:
-        current_count = db.index.ntotal
+        current_count = count_vectors(db)
         new_count = len(chunks)
 
         if new_count > current_count:

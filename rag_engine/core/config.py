@@ -30,5 +30,10 @@ class Settings:
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "10"))
     rag_temperature: float = float(os.getenv("RAG_TEMPERATURE", "0.1"))
 
+    vector_backend: str = os.getenv("VECTOR_BACKEND", "faiss").lower()
+    qdrant_url: str | None = os.getenv("QDRANT_URL")
+    qdrant_api_key: str | None = os.getenv("QDRANT_API_KEY")
+    qdrant_collection: str = os.getenv("QDRANT_COLLECTION", "tech_products")
+
 
 settings = Settings()
