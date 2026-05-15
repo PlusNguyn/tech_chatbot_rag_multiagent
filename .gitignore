@@ -22,6 +22,8 @@ dist/
 # --- Project Specific (RAG) ---
 # Thư mục chứa các vector đã được build (thường rất nặng)
 faiss_index/
+storage/faiss_index/
+db.sqlite3
 
 # Các file dữ liệu thô (Nếu bạn không muốn công khai dữ liệu khách hàng/sản phẩm)
 # data/*.csv
