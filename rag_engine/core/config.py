@@ -20,7 +20,7 @@ class Settings:
     """Tập hợp cấu hình đọc từ biến môi trường và giá trị mặc định."""
 
     base_dir: Path = BASE_DIR
-    data_dir: Path = BASE_DIR / "data"
+    data_dir: Path = BASE_DIR / "cellphones_output"
     storage_dir: Path = BASE_DIR / "storage"
     faiss_index_dir: Path = BASE_DIR / "storage" / "faiss_index"
     prompt_path: Path = BASE_DIR / "prompts" / "rag_prompt.txt"
@@ -28,7 +28,7 @@ class Settings:
     gemini_model: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
 
-    llm_provider: str = os.getenv("LLM_PROVIDER", "ollama").lower()
+    llm_provider: str = os.getenv("LLM_PROVIDER", "auto").lower()
     ollama_model: str = os.getenv("OLLAMA_MODEL", "qcwind/qwen2.5-7B-instruct-Q4_K_M")
     ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     rag_top_k: int = int(os.getenv("RAG_TOP_K", "10"))

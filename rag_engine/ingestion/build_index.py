@@ -1,4 +1,4 @@
-"""Pipeline ingestion để build vector index (FAISS hoặc Qdrant) từ dữ liệu nguồn."""
+"""Ingestion pipeline to build the vector index from TXT source data."""
 
 from rag_engine.core.config import settings
 from rag_engine.rag.chunking import split_docs
@@ -7,10 +7,10 @@ from rag_engine.rag.vector_store import create_vector_db
 
 
 def build_index(data_dir=None, index_dir=None):
-    """Load dữ liệu, chia chunk và ghi vào vector store theo backend cấu hình.
+    """Load data, split it into chunks, and write it to the configured vector store.
 
-    `index_dir` chỉ áp dụng cho backend FAISS; với Qdrant, đích lưu được xác
-    định bởi QDRANT_URL và QDRANT_COLLECTION trong cấu hình.
+    `index_dir` only applies to the FAISS backend. For Qdrant, the target is
+    determined by QDRANT_URL and QDRANT_COLLECTION in the configuration.
     """
     docs = load_data(data_dir or settings.data_dir)
     chunks = split_docs(docs)

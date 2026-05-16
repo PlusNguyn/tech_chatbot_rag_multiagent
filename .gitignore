@@ -33,3 +33,6 @@ db.sqlite3
 *.log
 tmp/
 .DS_Store
+
+# --- Data ---
+data/

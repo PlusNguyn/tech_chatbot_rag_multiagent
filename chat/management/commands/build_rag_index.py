@@ -1,4 +1,4 @@
-"""Django command dùng để tạo hoặc tạo lại FAISS index cho RAG."""
+"""Django command to build or rebuild the vector index for RAG."""
 
 from django.core.management.base import BaseCommand
 
@@ -8,17 +8,17 @@ from rag_engine.rag.vector_store import count_vectors
 
 
 class Command(BaseCommand):
-    """Command CLI build dữ liệu CSV thành vector index (FAISS hoặc Qdrant)."""
+    """CLI command that builds TXT product data into the vector index."""
 
-    help = "Build or rebuild the vector index from local product CSV data."
+    help = "Build or rebuild the vector index from local product TXT data."
 
     def add_arguments(self, parser):
-        """Khai báo các tham số dòng lệnh cho đường dẫn dữ liệu và index."""
+        """Declare CLI arguments for the data and index directories."""
         parser.add_argument("--data-dir", default=str(settings.data_dir))
         parser.add_argument("--index-dir", default=str(settings.faiss_index_dir))
 
     def handle(self, *args, **options):
-        """Chạy quá trình build index và in số lượng vector đã tạo."""
+        """Run the index build and print the resulting vector count."""
         db = build_index(
             data_dir=options["data_dir"],
             index_dir=options["index_dir"],

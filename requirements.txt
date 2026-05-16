@@ -2,6 +2,7 @@ django
 langchain
 langchain-community
 langchain-core
+langchain-qdrant
 langgraph
 faiss-cpu
 unstructured
