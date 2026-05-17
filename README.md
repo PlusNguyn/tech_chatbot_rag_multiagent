@@ -2,7 +2,7 @@
 
 # Tech Chatbot RAG Multi-Agent
 
-Ứng dụng Django + LangGraph cho chatbot tư vấn sản phẩm công nghệ dựa trên dữ liệu CSV nội bộ. Hệ thống dùng RAG với FAISS, embedding HuggingFace và Gemini để trả lời về điện thoại, laptop, iPad hoặc thông số sản phẩm.
+Ứng dụng Django + LangGraph cho chatbot tư vấn sản phẩm công nghệ dựa trên dữ liệu CSV nội bộ. Hệ thống dùng RAG với FAISS, embedding HuggingFace và hỗ trợ cả Gemini lẫn Ollama để trả lời về điện thoại, laptop, iPad hoặc thông số sản phẩm.
 
 ## Nhiệm vụ chính
 
@@ -52,7 +52,7 @@ supervisor -> retrieval -> advisor -> final_guardrails -> END
 
 - `supervisor`: kiểm tra query và chọn luồng tư vấn sản phẩm.
 - `retrieval`: tìm context liên quan trong FAISS.
-- `advisor`: dùng prompt RAG và Gemini để sinh câu trả lời.
+- `advisor`: dùng prompt RAG và LLM đã cấu hình (`Gemini` hoặc `Ollama`) để sinh câu trả lời.
 - `guardrails`: chặn câu trả lời khi thiếu context hoặc output rỗng.
 
 ## Cài đặt
@@ -66,11 +66,20 @@ pip install -r requirements.txt
 Tạo `.env`:
 
 ```env
+LLM_PROVIDER=auto
 GOOGLE_API_KEY=your_key_here
 GEMINI_MODEL=gemini-2.5-flash
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qcwind/qwen2.5-7B-instruct-Q4_K_M
 RAG_TOP_K=10
 RAG_TEMPERATURE=0.1
 ```
+
+## Chế độ LLM
+
+- `LLM_PROVIDER=auto`: ưu tiên Gemini nếu có `GOOGLE_API_KEY`, và tự động chuyển sang Ollama nếu Gemini lỗi hoặc không dùng được.
+- `LLM_PROVIDER=gemini`: ưu tiên Gemini trước, nhưng vẫn có thể rơi sang Ollama khi Gemini không hoạt động.
+- `LLM_PROVIDER=ollama`: ưu tiên Ollama trước, nhưng vẫn có thể rơi sang Gemini khi Ollama không hoạt động và `GOOGLE_API_KEY` đã được cấu hình.
 
 ## Build index và chạy Django
 
@@ -96,4 +105,3 @@ Response:
   "error": null
 }
 ```
-

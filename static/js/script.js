@@ -305,6 +305,7 @@ function loadChat(chatId) {
     
     // Render messages
     messagesArea.innerHTML = chat.messages.map(msg => createMessageHTML(msg)).join('');
+    hydrateRenderedMessages();
     
     // Scroll to bottom
     chatContainer.scrollTop = chatContainer.scrollHeight;
@@ -321,12 +322,13 @@ function loadChat(chatId) {
 function createMessageHTML(message) {
     const isUser = message.role === 'user';
     const avatarContent = isUser ? 'You' : 'AI';
+    const escapedRawContent = escapeHtml(message.content || '');
     
     return `
         <div class="message ${message.role}">
             <div class="message-avatar">${avatarContent}</div>
-            <div class="message-content">
-                ${formatMessageContent(message.content)}
+            <div class="message-content" data-raw-content="${escapedRawContent}">
+                <div class="message-body"></div>
                 <div class="message-actions">
                     <button class="message-action-btn" onclick="copyMessage(this)" title="Copy">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -340,27 +342,142 @@ function createMessageHTML(message) {
     `;
 }
 
-// Format message content (basic markdown)
+// Format message content while preserving LaTeX for MathJax.
 function formatMessageContent(content) {
-    // Escape HTML first
+    const { text, tokens } = tokenizeSpecialBlocks(content);
+    const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+
+    if (!blocks.length) {
+        return '<p></p>';
+    }
+
+    return blocks.map(block => renderBlock(block, tokens)).join('');
+}
+
+function tokenizeSpecialBlocks(content) {
+    const tokens = new Map();
+    let index = 0;
+    let text = content;
+
+    const storeToken = (html) => {
+        const token = `@@TOKEN_${index++}@@`;
+        tokens.set(token, html);
+        return token;
+    };
+
+    text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang = '', code = '') => {
+        const languageClass = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+        const html = `<pre><code${languageClass}>${escapeHtml(code.trimEnd())}</code></pre>`;
+        return `\n\n${storeToken(html)}\n\n`;
+    });
+
+    text = text.replace(/\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$/g, (match) => {
+        return `\n\n${storeToken(`<div class="math-block">${escapeHtml(match)}</div>`)}\n\n`;
+    });
+
+    text = text.replace(/`([^`\n]+)`/g, (_, code) => {
+        return storeToken(`<code>${escapeHtml(code)}</code>`);
+    });
+
+    text = text.replace(/\\\([\s\S]*?\\\)|(?<!\\)\$(?!\s)([^$\n]|\\\$)+?(?<!\s)\$/g, (match) => {
+        return storeToken(`<span class="math-inline">${escapeHtml(match)}</span>`);
+    });
+
+    return { text, tokens };
+}
+
+function renderBlock(block, tokens) {
+    if (tokens.has(block)) {
+        return tokens.get(block);
+    }
+
+    const lines = block.split('\n');
+
+    if (lines.every(line => /^\s*[-*]\s+/.test(line))) {
+        const items = lines.map(line => {
+            const item = line.replace(/^\s*[-*]\s+/, '');
+            return `<li>${formatInlineContent(item, tokens)}</li>`;
+        }).join('');
+        return `<ul>${items}</ul>`;
+    }
+
+    if (lines.every(line => /^\s*\d+\.\s+/.test(line))) {
+        const items = lines.map(line => {
+            const item = line.replace(/^\s*\d+\.\s+/, '');
+            return `<li>${formatInlineContent(item, tokens)}</li>`;
+        }).join('');
+        return `<ol>${items}</ol>`;
+    }
+
+    return `<p>${lines.map(line => formatInlineContent(line, tokens)).join('<br>')}</p>`;
+}
+
+function formatInlineContent(content, tokens) {
     let formatted = escapeHtml(content);
-    
-    // Code blocks
-    formatted = formatted.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-    
-    // Inline code
-    formatted = formatted.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
-    // Bold
     formatted = formatted.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    
-    // Italic
-    formatted = formatted.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    
-    // Line breaks
-    formatted = formatted.replace(/\n/g, '<br>');
-    
-    return `<p>${formatted}</p>`;
+    formatted = formatted.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,!?]|$)/g, '$1<em>$2</em>');
+
+    tokens.forEach((html, token) => {
+        formatted = formatted.replaceAll(token, html);
+    });
+
+    return formatted;
+}
+
+function formatPlainMessageContent(content) {
+    return `<p class="message-plain">${escapeHtml(content).replace(/\n/g, '<br>')}</p>`;
+}
+
+function getMessageBodyElement(messageEl) {
+    return messageEl.querySelector('.message-body');
+}
+
+function getMessageContentElement(messageEl) {
+    return messageEl.querySelector('.message-content');
+}
+
+function getRawMessageContent(messageEl) {
+    return getMessageContentElement(messageEl)?.dataset.rawContent || '';
+}
+
+function setRawMessageContent(messageEl, content) {
+    const contentEl = getMessageContentElement(messageEl);
+    if (contentEl) {
+        contentEl.dataset.rawContent = content;
+    }
+}
+
+function renderMessageElement(messageEl, { streaming = false } = {}) {
+    const bodyEl = getMessageBodyElement(messageEl);
+    if (!bodyEl) return;
+
+    const rawContent = getRawMessageContent(messageEl);
+    bodyEl.innerHTML = streaming
+        ? formatPlainMessageContent(rawContent)
+        : formatMessageContent(rawContent);
+
+    if (!streaming) {
+        typesetMath(bodyEl);
+    }
+}
+
+function hydrateRenderedMessages() {
+    document.querySelectorAll('.message').forEach((messageEl) => {
+        renderMessageElement(messageEl);
+    });
+}
+
+function typesetMath(container) {
+    if (!window.MathJax?.typesetPromise) return;
+
+    try {
+        if (typeof window.MathJax.typesetClear === 'function') {
+            window.MathJax.typesetClear([container]);
+        }
+        window.MathJax.typesetPromise([container]).catch(() => {});
+    } catch (_) {
+        // Ignore MathJax timing errors while the script is still loading.
+    }
 }
 
 // Escape HTML
@@ -403,6 +520,7 @@ function sendMessage() {
     
     // Render user message
     messagesArea.innerHTML += createMessageHTML(userMessage);
+    renderMessageElement(messagesArea.lastElementChild);
     
     // Clear input
     messageInput.value = '';
@@ -468,14 +586,14 @@ async function getBotResponse(userMessage) {
         wrapper.innerHTML = createMessageHTML(botMessage);
         placeholder = wrapper.firstElementChild;
         messagesArea.appendChild(placeholder);
+        renderMessageElement(placeholder, { streaming: true });
         return placeholder;
     };
 
-    const renderInto = (text) => {
+    const renderInto = (text, { streaming = true } = {}) => {
         const target = ensurePlaceholder();
-        const contentEl = target.querySelector('.message-content p')
-            || target.querySelector('.message-content');
-        if (contentEl) contentEl.textContent = text;
+        setRawMessageContent(target, text);
+        renderMessageElement(target, { streaming });
         chatContainer.scrollTop = chatContainer.scrollHeight;
     };
 
@@ -516,7 +634,7 @@ async function getBotResponse(userMessage) {
                 }
                 if (event.token) {
                     accumulated += event.token;
-                    renderInto(accumulated);
+                    renderInto(accumulated, { streaming: true });
                 }
                 if (event.sources) sources = event.sources;
                 if (event.error) errorMessage = event.error;
@@ -529,7 +647,7 @@ async function getBotResponse(userMessage) {
         }
 
         const finalContent = accumulated.trim() || 'Empty response.';
-        renderInto(finalContent);
+        renderInto(finalContent, { streaming: false });
 
         const chat = chats.find(c => c.id === currentChatId);
         if (chat) {
@@ -543,7 +661,7 @@ async function getBotResponse(userMessage) {
         }
     } catch (error) {
         const text = `Sorry, the chatbot could not answer right now.\n\n${error.message}`;
-        renderInto(text);
+        renderInto(text, { streaming: false });
         const chat = chats.find(c => c.id === currentChatId);
         if (chat) {
             chat.messages.push({
@@ -578,7 +696,7 @@ function extractBotContent(data) {
 
 // Copy message
 function copyMessage(btn) {
-    const content = btn.closest('.message-content').querySelector('p').textContent;
+    const content = btn.closest('.message-content')?.dataset.rawContent || '';
     navigator.clipboard.writeText(content).then(() => {
         showToast('Copied to clipboard', 'success');
     });

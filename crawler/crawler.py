@@ -1135,9 +1135,9 @@ def product_to_rag_text(product: Dict) -> str:
 def save_outputs(products: List[Dict], output_dir: Path):
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    json_path = output_dir / "cellphones_phones.json"
-    jsonl_path = output_dir / "cellphones_phones.jsonl"
-    txt_path = output_dir / "cellphones_phones_rag.txt"
+    json_path = output_dir / "json/cellphones_phones.json"
+    jsonl_path = output_dir / "json/cellphones_phones.jsonl"
+    txt_path = output_dir / "txt/cellphones_phones_rag.txt"
 
     with json_path.open("w", encoding="utf-8") as f:
         json.dump(products, f, ensure_ascii=False, indent=2)

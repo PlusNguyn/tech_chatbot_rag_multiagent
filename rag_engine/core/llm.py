@@ -1,4 +1,4 @@
-"""LLM dispatcher that selects Gemini or Ollama based on configuration."""
+"""LLM dispatcher with runtime fallback between Gemini and Ollama."""
 
 from __future__ import annotations
 
@@ -43,20 +43,33 @@ def _generate_ollama(prompt: str, temperature: float) -> str:
 
 
 def generate_response(prompt: str, temperature: float) -> str:
-    """Generate a response from the configured or auto-detected LLM provider."""
-    provider = _resolve_provider()
-    if provider == "gemini":
-        return _generate_gemini(prompt, temperature)
-    return _generate_ollama(prompt, temperature)
+    """Generate a response and fall back to the other provider on failure."""
+    errors: list[tuple[str, Exception]] = []
+    for provider in _resolve_providers():
+        try:
+            return _generate_with_provider(provider, prompt, temperature)
+        except Exception as exc:  # pragma: no cover - depends on provider availability
+            errors.append((provider, exc))
+    raise LLMConfigurationError(_build_all_providers_failed_message(errors))
 
 
 def stream_response(prompt: str, temperature: float):
-    """Yield streamed chunks from the configured or auto-detected LLM provider."""
-    provider = _resolve_provider()
-    if provider == "gemini":
-        yield from _stream_gemini(prompt, temperature)
-        return
-    yield from _stream_ollama(prompt, temperature)
+    """Yield streamed chunks and fall back before any token is emitted."""
+    errors: list[tuple[str, Exception]] = []
+    for provider in _resolve_providers():
+        emitted = False
+        try:
+            for chunk in _stream_with_provider(provider, prompt, temperature):
+                emitted = True
+                yield chunk
+            return
+        except Exception as exc:  # pragma: no cover - depends on provider availability
+            if emitted:
+                raise LLMConfigurationError(
+                    _build_stream_interrupted_message(provider, exc)
+                ) from exc
+            errors.append((provider, exc))
+    raise LLMConfigurationError(_build_all_providers_failed_message(errors))
 
 
 def _stream_ollama(prompt: str, temperature: float):
@@ -107,21 +120,43 @@ def _stream_gemini(prompt: str, temperature: float):
             yield text
 
 
-def _resolve_provider() -> str:
-    """Resolve the provider from config, with auto-fallback when possible."""
+def _generate_with_provider(provider: str, prompt: str, temperature: float) -> str:
+    """Dispatch a non-streaming request to one provider."""
+    if provider == "gemini":
+        return _generate_gemini(prompt, temperature)
+    return _generate_ollama(prompt, temperature)
+
+
+def _stream_with_provider(provider: str, prompt: str, temperature: float):
+    """Dispatch a streaming request to one provider."""
+    if provider == "gemini":
+        yield from _stream_gemini(prompt, temperature)
+        return
+    yield from _stream_ollama(prompt, temperature)
+
+
+def _resolve_providers() -> list[str]:
+    """Return ordered provider candidates based on config and readiness."""
     provider = (settings.llm_provider or "auto").lower()
-    if provider in {"gemini", "ollama"}:
-        return provider
-    if provider != "auto":
+    if provider not in {"auto", "gemini", "ollama"}:
         raise LLMConfigurationError(
             f"Unsupported LLM_PROVIDER='{settings.llm_provider}'. Use auto, gemini, or ollama."
         )
 
-    if settings.google_api_key:
-        return "gemini"
-    if _is_ollama_available():
-        return "ollama"
+    preferred_order = ["gemini", "ollama"] if provider != "ollama" else ["ollama", "gemini"]
+    candidates = [name for name in preferred_order if _is_provider_ready(name)]
+    if candidates:
+        return candidates
     raise LLMConfigurationError(_build_no_provider_message())
+
+
+def _is_provider_ready(provider: str) -> bool:
+    """Check whether a provider is configured well enough to try."""
+    if provider == "gemini":
+        return bool(settings.google_api_key)
+    if provider == "ollama":
+        return _is_ollama_available()
+    return False
 
 
 def _is_ollama_available() -> bool:
@@ -153,3 +188,30 @@ def _build_ollama_unavailable_message() -> str:
         "Khong the ket noi toi Ollama. Hay bat Ollama tai "
         f"{settings.ollama_host} hoac doi LLM_PROVIDER=gemini va cau hinh GOOGLE_API_KEY."
     )
+
+
+def _build_all_providers_failed_message(errors: list[tuple[str, Exception]]) -> str:
+    """Return one combined error after all configured providers have failed."""
+    if not errors:
+        return _build_no_provider_message()
+
+    details = "; ".join(
+        f"{provider}: {_summarize_error(exc)}" for provider, exc in errors
+    )
+    return f"Khong the su dung ca Gemini lan Ollama. Chi tiet: {details}"
+
+
+def _build_stream_interrupted_message(provider: str, exc: Exception) -> str:
+    """Return an error for streams that already emitted output before failing."""
+    return (
+        f"Luong phan hoi tu {provider} bi gian doan sau khi da bat dau tra loi: "
+        f"{_summarize_error(exc)}"
+    )
+
+
+def _summarize_error(exc: Exception) -> str:
+    """Convert provider exceptions to short user-facing text."""
+    message = str(exc).strip()
+    if not message:
+        return exc.__class__.__name__
+    return f"{exc.__class__.__name__}: {message}"

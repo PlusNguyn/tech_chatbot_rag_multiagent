@@ -73,7 +73,7 @@ def run_chatbot(db):
 
 def main():
     """Khởi động chatbot: load prompt, chuẩn bị index và mở vòng lặp chat."""
-    print("Starting RAG Chatbot with Gemini...\n")
+    print("Starting RAG Chatbot with the configured LLM provider...\n")
     load_prompt()
     chunks = prepare_chunks()
     db = get_or_create_db(chunks)

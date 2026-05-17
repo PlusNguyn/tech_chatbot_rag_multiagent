@@ -502,12 +502,26 @@ body {
     min-width: 0;
 }
 
-.message-content p {
+.message-body > * {
     margin-bottom: 12px;
 }
 
-.message-content p:last-child {
+.message-body > *:last-child {
     margin-bottom: 0;
+}
+
+.message-body p,
+.message-body li {
+    word-break: break-word;
+}
+
+.message-body ul,
+.message-body ol {
+    margin-left: 20px;
+}
+
+.message-body .message-plain {
+    white-space: pre-wrap;
 }
 
 .message-content code {
@@ -530,6 +544,17 @@ body {
 .message-content pre code {
     background: none;
     padding: 0;
+}
+
+.message-content .mjx-container {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.message-content .mjx-container[display="true"] {
+    display: block;
+    padding: 4px 0;
 }
 
 .message-actions {
