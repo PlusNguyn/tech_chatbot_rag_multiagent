@@ -71,9 +71,14 @@ GOOGLE_API_KEY=your_key_here
 GEMINI_MODEL=gemini-2.5-flash
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=qcwind/qwen2.5-7B-instruct-Q4_K_M
+EMBEDDING_DEVICE=cuda
 RAG_TOP_K=10
 RAG_TEMPERATURE=0.1
 ```
+
+`EMBEDDING_DEVICE=auto` se tu dong chon `cuda` neu `torch` thay GPU,
+nguoc lai se fallback ve `cpu`. Neu dat `EMBEDDING_DEVICE=cuda`, hay dam bao
+ban dang dung ban PyTorch co ho tro CUDA.
 
 ## Chế độ LLM
 

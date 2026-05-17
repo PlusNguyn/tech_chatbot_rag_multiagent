@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from rag_engine.core.config import settings
 
+import google.generativeai as genai
 
 class LLMConfigurationError(RuntimeError):
     """Raised when no usable LLM provider is configured or reachable."""
@@ -13,8 +14,6 @@ def _generate_gemini(prompt: str, temperature: float) -> str:
     """Call the Gemini API and return the generated text."""
     if not settings.google_api_key:
         raise LLMConfigurationError("GOOGLE_API_KEY is not configured.")
-
-    import google.generativeai as genai
 
     genai.configure(api_key=settings.google_api_key)
     model = genai.GenerativeModel(settings.gemini_model)

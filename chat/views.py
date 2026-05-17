@@ -34,9 +34,10 @@ def chat_message(request):
     query = str(payload.get("query", "")).strip()
     if not query:
         return JsonResponse({"error": "Field 'query' is required."}, status=400)
+    history = payload.get("history", [])
 
     response = StreamingHttpResponse(
-        stream_chat(query),
+        stream_chat(query, history=history),
         content_type="text/event-stream",
     )
     response["Cache-Control"] = "no-cache"

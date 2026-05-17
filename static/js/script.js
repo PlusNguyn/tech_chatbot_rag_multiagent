@@ -42,6 +42,8 @@ let settings = {
     enterSend: true
 };
 let deleteTargetId = null;
+const pendingMathContainers = new Set();
+let mathJaxRetryTimer = null;
 
 // Initialize
 function init() {
@@ -358,6 +360,7 @@ function tokenizeSpecialBlocks(content) {
     const tokens = new Map();
     let index = 0;
     let text = content;
+    const mathFenceLanguages = new Set(['latex', 'tex', 'math', 'katex']);
 
     const storeToken = (html) => {
         const token = `@@TOKEN_${index++}@@`;
@@ -365,14 +368,34 @@ function tokenizeSpecialBlocks(content) {
         return token;
     };
 
+    const wrapMathBlock = (mathContent) => {
+        const trimmed = mathContent.trim();
+        if (!trimmed) {
+            return '';
+        }
+
+        const alreadyDelimited = (
+            (trimmed.startsWith('$$') && trimmed.endsWith('$$'))
+            || (trimmed.startsWith('\\[') && trimmed.endsWith('\\]'))
+        );
+        const normalized = alreadyDelimited ? trimmed : `$$\n${trimmed}\n$$`;
+        return `<div class="math-block">${escapeHtml(normalized)}</div>`;
+    };
+
     text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang = '', code = '') => {
+        const normalizedLang = String(lang || '').trim().toLowerCase();
+        if (mathFenceLanguages.has(normalizedLang)) {
+            const html = wrapMathBlock(code);
+            return html ? `\n\n${storeToken(html)}\n\n` : '\n\n';
+        }
+
         const languageClass = lang ? ` class="language-${escapeHtml(lang)}"` : '';
         const html = `<pre><code${languageClass}>${escapeHtml(code.trimEnd())}</code></pre>`;
         return `\n\n${storeToken(html)}\n\n`;
     });
 
     text = text.replace(/\\\[[\s\S]*?\\\]|\$\$[\s\S]*?\$\$/g, (match) => {
-        return `\n\n${storeToken(`<div class="math-block">${escapeHtml(match)}</div>`)}\n\n`;
+        return `\n\n${storeToken(wrapMathBlock(match))}\n\n`;
     });
 
     text = text.replace(/`([^`\n]+)`/g, (_, code) => {
@@ -467,17 +490,58 @@ function hydrateRenderedMessages() {
     });
 }
 
-function typesetMath(container) {
-    if (!window.MathJax?.typesetPromise) return;
+function scheduleMathTypesetRetry() {
+    if (mathJaxRetryTimer) return;
 
-    try {
-        if (typeof window.MathJax.typesetClear === 'function') {
-            window.MathJax.typesetClear([container]);
-        }
-        window.MathJax.typesetPromise([container]).catch(() => {});
-    } catch (_) {
-        // Ignore MathJax timing errors while the script is still loading.
+    mathJaxRetryTimer = window.setTimeout(() => {
+        mathJaxRetryTimer = null;
+        flushPendingMathTypeset();
+    }, 100);
+}
+
+function flushPendingMathTypeset() {
+    if (!pendingMathContainers.size) return;
+
+    if (!window.MathJax?.typesetPromise) {
+        scheduleMathTypesetRetry();
+        return;
     }
+
+    const containers = Array.from(pendingMathContainers).filter((container) => container?.isConnected);
+    pendingMathContainers.clear();
+
+    if (!containers.length) return;
+
+    const runTypeset = () => {
+        try {
+            if (typeof window.MathJax.typesetClear === 'function') {
+                window.MathJax.typesetClear(containers);
+            }
+            window.MathJax.typesetPromise(containers).catch(() => {});
+        } catch (_) {
+            // Retry if MathJax is still finishing startup work.
+            containers.forEach((container) => pendingMathContainers.add(container));
+            scheduleMathTypesetRetry();
+        }
+    };
+
+    const startupPromise = window.MathJax?.startup?.promise;
+    if (startupPromise?.then) {
+        startupPromise.then(runTypeset).catch(() => {
+            containers.forEach((container) => pendingMathContainers.add(container));
+            scheduleMathTypesetRetry();
+        });
+        return;
+    }
+
+    runTypeset();
+}
+
+function typesetMath(container) {
+    if (!container) return;
+
+    pendingMathContainers.add(container);
+    flushPendingMathTypeset();
 }
 
 // Escape HTML
@@ -598,10 +662,22 @@ async function getBotResponse(userMessage) {
     };
 
     try {
+        const activeChat = chats.find(c => c.id === currentChatId);
+        const history = (activeChat?.messages || [])
+            .slice(0, -1)
+            .map((message) => ({
+                role: message.role === 'bot' ? 'assistant' : message.role,
+                content: message.content,
+            }));
+
         const response = await fetch(chatApiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: userMessage }),
+            body: JSON.stringify({
+                query: userMessage,
+                session_id: currentChatId,
+                history,
+            }),
         });
 
         if (!response.ok || !response.body) {

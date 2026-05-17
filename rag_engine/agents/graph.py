@@ -8,6 +8,7 @@ from rag_engine.agents.guardrails.agent import (
     no_context_guardrail_agent,
 )
 from rag_engine.agents.retrieval.agent import make_retrieval_agent
+from rag_engine.agents.reranker.agent import make_reranker_agent
 from rag_engine.agents.state import AgentState
 from rag_engine.agents.supervisor.agent import supervisor_agent
 from rag_engine.core.config import settings
@@ -24,16 +25,22 @@ def _route_after_supervisor(state: AgentState) -> str:
 
 
 def _route_after_retrieval(state: AgentState) -> str:
-    """Chuyển sang advisor khi có tài liệu, hoặc guardrail khi thiếu context."""
+    """Chuyển sang reranker khi có tài liệu, hoặc guardrail khi thiếu context."""
+    return "reranker" if state.get("retrieved_docs") else "no_context_guardrails"
+
+
+def _route_after_reranker(state: AgentState) -> str:
+    """Chỉ sinh câu trả lời khi reranker vẫn giữ được context."""
     return "advisor" if state.get("retrieved_docs") else "no_context_guardrails"
 
 
 def build_chat_graph(db, top_k: int | None = None):
-    """Tạo graph hội thoại gồm supervisor, retrieval, advisor và guardrails."""
+    """Tạo graph hội thoại gồm supervisor, retrieval, reranker, advisor và guardrails."""
     workflow = StateGraph(AgentState)
 
     workflow.add_node("supervisor", supervisor_agent)
     workflow.add_node("retrieval", make_retrieval_agent(db, top_k or settings.rag_top_k))
+    workflow.add_node("reranker", make_reranker_agent(top_k or settings.rag_top_k))
     workflow.add_node("advisor", advisor_agent)
     workflow.add_node("smalltalk", smalltalk_agent)
     workflow.add_node("no_context_guardrails", no_context_guardrail_agent)
@@ -52,6 +59,14 @@ def build_chat_graph(db, top_k: int | None = None):
     workflow.add_conditional_edges(
         "retrieval",
         _route_after_retrieval,
+        {
+            "reranker": "reranker",
+            "no_context_guardrails": "no_context_guardrails",
+        },
+    )
+    workflow.add_conditional_edges(
+        "reranker",
+        _route_after_reranker,
         {
             "advisor": "advisor",
             "no_context_guardrails": "no_context_guardrails",
